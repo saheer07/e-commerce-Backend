@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Welcome to Bull Wheels!</title>
+  <style>
+    body { 
+      font-family: 'Helvetica', Arial, sans-serif; 
+      background-color: #f0f2f5; 
+      margin: 0; 
+      padding: 0; 
+      animation: fadeInBody 1s ease-in;
+    }
+
+    @keyframes fadeInBody {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    .container { 
+      max-width: 600px; 
+      margin: 30px auto; 
+      background-color: #ffffff; 
+      border-radius: 12px; 
+      overflow: hidden; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+      border-top: 5px solid #e60023;
+      animation: fadeInContainer 1s ease-out;
+    }
+
+    @keyframes fadeInContainer {
+      0% { transform: translateY(-20px); opacity: 0; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    .header { 
+      background-color: #e60023; 
+      color: #fff; 
+      padding: 20px; 
+      text-align: center; 
+      animation: fadeInHeader 1.2s ease-in-out;
+    }
+
+    @keyframes fadeInHeader {
+      0% { opacity: 0; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .header img {
+      max-width: 80px;
+      margin-bottom: 10px;
+      animation: rotateLogo 1.5s ease-in-out;
+    }
+
+    @keyframes rotateLogo {
+      0% { transform: rotate(-10deg); }
+      50% { transform: rotate(10deg); }
+      100% { transform: rotate(0deg); }
+    }
+
+    .content { 
+      padding: 25px 30px; 
+      color: #333; 
+    }
+    .content h2 {
+      color: #e60023;
+      margin-top: 0;
+      animation: fadeInText 1.5s ease-in;
+    }
+
+    @keyframes fadeInText {
+      0% { opacity: 0; transform: translateX(-20px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+
+    .btn { 
+      display: inline-block; 
+      padding: 12px 25px; 
+      background-color: #e60023; 
+      color: #fff; 
+      text-decoration: none; 
+      border-radius: 6px; 
+      margin-top: 20px; 
+      font-weight: bold;
+      transition: transform 0.3s ease, background-color 0.3s ease;
+      animation: fadeInButton 2s ease-in;
+    }
+
+    .btn:hover {
+      background-color: #bf001c;
+      transform: scale(1.05);
+    }
+
+    @keyframes fadeInButton {
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .footer { 
+      text-align: center; 
+      font-size: 12px; 
+      color: #999; 
+      padding: 15px 0; 
+    }
+
+    .car-image {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      animation: slideInCar 1.5s ease-out;
+    }
+
+    @keyframes slideInCar {
+      0% { opacity: 0; transform: translateX(-50px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+
+    p { line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.heroscreen.cc%2F2022%2F04%2Fcar-pc-wallpaper-hd-4k.html&psig=AOvVaw3QFDs2MgW7FxYcEEiDHXS5&ust=1763710729438000&source=images&cd=vfe&opi=89978449&ved=0CBUQjRxqFwoTCIDPs9ucgJEDFQAAAAAdAAAAABAp" alt="Bull Wheels Logo">
+      <h1>Welcome to Bull Wheels!</h1>
+    </div>
+    <div class="content">
+      <img src="https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.dreamstime.com%2Fphotos-images%2Falloy-wheels.html&psig=AOvVaw2QJETwL7jEcS4Z9aaOgsq_&ust=1763710551206000&source=images&cd=vfe&opi=89978449&ved=0CBUQjRxqFwoTCLCS2YCcgJEDFQAAAAAdAAAAABAE" 
+           alt="Car" class="car-image">
+      <h2>Hello {{ user.username }},</h2>
+      <p>Thank you for registering at <strong>Bull Wheels</strong>! We’re thrilled to have you join our community of car enthusiasts.</p>
+      <p>Now you can browse our cars, explore latest deals, and enjoy a smooth shopping experience.</p>
+      <a href="http://localhost:3000/login" class="btn">Login Now</a>
+      <p style="margin-top:20px;">If you did not sign up for this account, please ignore this email.</p>
+    </div>
+    <div class="footer">
+      &copy; {{ year }} Bull Wheels. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
