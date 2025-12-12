@@ -1,15 +1,16 @@
 from pathlib import Path
 from datetime import timedelta
 import os
-from dotenv import load_dotenv
+from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ----------------------------
 # SECURITY
 # ----------------------------
-SECRET_KEY = 'django-insecure-=@ric781vq_skkfjw*n8g$ts=ah)(owx$$ctyovurp&+qkyaw='
-DEBUG = True
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', cast=bool)
+
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 # ----------------------------
@@ -32,28 +33,26 @@ INSTALLED_APPS = [
     'reviews',
     'wishlist',
 
-
-    # Admin Module
-   "admin_dashboard",
+    # Admin module
+    "admin_dashboard",
 
     # Third-party apps
     'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
-    'dj_rest_auth.registration',
 
-    # Allauth (for normal + social login)
+    'dj_rest_auth.registration',
     'django.contrib.sites',
+
     'allauth',
-    # 'allauth.account',
     'allauth.socialaccount',
 
     # Social providers
     'allauth.socialaccount.providers.google',
     'allauth.socialaccount.providers.facebook',
 ]
-AUTH_USER_MODEL = "accounts.CustomUser"
 
+AUTH_USER_MODEL = "accounts.CustomUser"
 SITE_ID = 1
 
 # ----------------------------
@@ -63,7 +62,6 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
 
-    # ✅ CORS middleware must come before CommonMiddleware
     'corsheaders.middleware.CorsMiddleware',
 
     'django.middleware.common.CommonMiddleware',
@@ -72,7 +70,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    # ✅ Needed for django-allauth
     "allauth.account.middleware.AccountMiddleware",
 ]
 
@@ -84,7 +81,7 @@ ROOT_URLCONF = 'ecommerce.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS':[os.path.join(BASE_DIR, 'templates')],# Add your templates directory if needed
+        'DIRS':[os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -98,20 +95,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'ecommerce.wsgi.application'
 
-# ----------------------------e
-# DATABASE
+# ----------------------------
+# DATABASE (PostgreSQL)
 # ----------------------------
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'ecommerce_db',       # your database name
-        'USER': 'myuser',             # your db username
-        'PASSWORD': '12345',     # your db password
-        'HOST': 'localhost',          # usually localhost
-        'PORT': '5432',               # default postgres port
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT'),
     }
 }
-
 
 # ----------------------------
 # PASSWORD VALIDATION
@@ -127,7 +123,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # INTERNATIONALIZATION
 # ----------------------------
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Kolkata'  # ✅ better for Indian timezone
+TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
 USE_TZ = True
 
@@ -140,9 +136,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ----------------------------
-# ✅ REST FRAMEWORK SETTINGS
+# REST FRAMEWORK
 # ----------------------------
-
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -154,12 +149,11 @@ REST_FRAMEWORK = {
     ),
 }
 
-
 # ----------------------------
-# ✅ SIMPLE JWT CONFIG
+# SIMPLE JWT
 # ----------------------------
 SIMPLE_JWT = {
-   'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -167,29 +161,17 @@ SIMPLE_JWT = {
 }
 
 # ----------------------------
-# ✅ CORS SETTINGS
+# CORS
 # ----------------------------
-CORS_ALLOW_ALL_ORIGINS = False  # ❌ Not recommended to keep True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
-
 # ----------------------------
-# ✅ CSRF TRUSTED ORIGINS
+# CSRF TRUSTED ORIGINS
 # ----------------------------
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
@@ -200,25 +182,18 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # ----------------------------
-# ✅ RAZORPAY KEYS (Test mode)
+# RAZORPAY (from .env)
 # ----------------------------
-RAZORPAY_KEY_ID = "your_razorpay_key_id"
-RAZORPAY_KEY_SECRET = "your_razorpay_key_secret"
+RAZORPAY_KEY_ID = config("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = config("RAZORPAY_KEY_SECRET")
 
-
-
-
-
-load_dotenv()
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-
+# ----------------------------
+# EMAIL CONFIG (from .env)
+# ----------------------------
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')  # your Gmail address
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')  # App password
-DEFAULT_FROM_EMAIL = 'admin@example.com'
-
-
+EMAIL_HOST_USER = config("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = config("EMAIL_HOST_USER")

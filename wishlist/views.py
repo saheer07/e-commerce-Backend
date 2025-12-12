@@ -7,7 +7,7 @@ from .serializers import WishlistSerializer
 from products.models import Product
 
 
-# ✅ 1. Add/Remove (Toggle) Wishlist
+# 1. Add/Remove (Toggle) Wishlist
 class ToggleWishlistView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -37,7 +37,7 @@ class ToggleWishlistView(APIView):
         )
 
 
-# ✅ 2. Get all wishlist items
+#  2. Get all wishlist items
 class WishlistListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -47,7 +47,7 @@ class WishlistListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-# ✅ 3. Remove a wishlist item (by wishlist ID)
+#  3. Remove a wishlist item (by wishlist ID)
 class RemoveWishlistItemView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -4,7 +4,7 @@ from rest_framework.exceptions import PermissionDenied
 from .models import Review
 from .serializers import ReviewSerializer
 
-# ✅ List + Create Reviews
+#  List + Create Reviews
 class ReviewListCreateView(generics.ListCreateAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -19,7 +19,7 @@ class ReviewListCreateView(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 
-# ✅ Delete Review (only owner or admin)
+#  Delete Review (only owner or admin)
 class ReviewDeleteView(generics.DestroyAPIView):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
@@ -29,7 +29,7 @@ class ReviewDeleteView(generics.DestroyAPIView):
         review = self.get_object()
         user = request.user
 
-        # ✅ Allow only owner or admin
+        #  Allow only owner or admin
         if user.is_staff or review.user == user:
             review.delete()
             return Response(

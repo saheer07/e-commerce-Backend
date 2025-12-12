@@ -3,11 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status, permissions  
 from django.utils import timezone
 from datetime import timedelta
-from .models import Order , OrderItem
+from .models import Order, OrderItem
 from products.models import Product
 from .serializers import OrderSerializer
-from rest_framework.permissions import AllowAny
-from django.utils import timezone
 from django.db import transaction
 import razorpay
 from django.conf import settings
@@ -96,21 +94,18 @@ class CancelOrderAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if order is already cancelled
         if order.status == "Cancelled":
             return Response(
                 {"error": "This order has already been cancelled"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Check if order can still be cancelled (only "Ordered" status)
         if order.status != "Ordered":
             return Response(
                 {"error": f"Cannot cancel order with status '{order.status}'"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Calculate days difference (changed from 3 to 2 days)
         days_since_order = (timezone.now().date() - order.purchased_at.date()).days
         
         if days_since_order > 2:
@@ -123,7 +118,6 @@ class CancelOrderAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Validate cancellation reason
         reason = request.data.get("reason", "").strip()
         if not reason:
             return Response(
@@ -139,23 +133,21 @@ class CancelOrderAPIView(APIView):
         
         # Cancel the order
         order.status = "Cancelled"
-        order.cancelled_reason = reason
+        order.cancellation_reason = reason
+        order.cancelled_at = timezone.now()
         order.save()
         
-        # Restock products - handle both single product and multiple items
+        # Restock products
         try:
-            # If order has OrderItems (new structure)
             order_items = OrderItem.objects.filter(order=order)
             if order_items.exists():
                 for item in order_items:
                     item.product.stock += item.quantity
                     item.product.save(update_fields=['stock'])
-            # If order has direct product reference (old structure)
             elif hasattr(order, 'product') and order.product:
                 order.product.stock += order.quantity
                 order.product.save(update_fields=['stock'])
         except Exception as e:
-            # Log error but don't fail the cancellation
             print(f"Error restocking products: {e}")
         
         return Response(
@@ -163,19 +155,16 @@ class CancelOrderAPIView(APIView):
                 "message": "Order cancelled successfully and stock has been restored",
                 "order_id": order.id,
                 "status": order.status,
-                "cancelled_reason": order.cancelled_reason
+                "cancelled_reason": order.cancellation_reason
             },
             status=status.HTTP_200_OK
         )
-    
+
 
 class VerifyPaymentAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
-        """
-        Verify Razorpay payment signature
-        """
         try:
             razorpay_order_id = request.data.get('razorpay_order_id')
             razorpay_payment_id = request.data.get('razorpay_payment_id')
@@ -187,7 +176,6 @@ class VerifyPaymentAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Find the order
             try:
                 order = Order.objects.get(
                     razorpay_order_id=razorpay_order_id,
@@ -207,7 +195,6 @@ class VerifyPaymentAPIView(APIView):
             ).hexdigest()
             
             if generated_signature == razorpay_signature:
-                # Payment verified successfully
                 order.razorpay_payment_id = razorpay_payment_id
                 order.razorpay_signature = razorpay_signature
                 order.payment_status = 'COMPLETED'
@@ -223,7 +210,6 @@ class VerifyPaymentAPIView(APIView):
                     status=status.HTTP_200_OK
                 )
             else:
-                # Signature verification failed
                 order.payment_status = 'FAILED'
                 order.save()
                 
@@ -240,26 +226,38 @@ class VerifyPaymentAPIView(APIView):
             )
 
 
-
-
 class AdminOrderListView(APIView):
     permission_classes = [IsAdminUser]
     
     def get(self, request):
-        orders = Order.objects.all().order_by('-purchased_at')
-        serializer = OrderSerializer(orders, many=True)
-        return Response(serializer.data)
+        try:
+            orders = Order.objects.all().select_related('user').prefetch_related('items__product').order_by('-purchased_at')
+            serializer = OrderSerializer(orders, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error fetching admin orders: {e}")
+            return Response(
+                {"error": "Failed to fetch orders", "detail": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class AdminOrderDetailView(APIView):
     permission_classes = [IsAdminUser]
     
     def get(self, request, order_id):
         try:
-            order = Order.objects.get(id=order_id)
+            order = Order.objects.select_related('user').prefetch_related('items__product').get(id=order_id)
             serializer = OrderSerializer(order)
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except Order.DoesNotExist:
-            return Response({"error": "Order not found"}, status=404)
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"Error fetching order detail: {e}")
+            return Response(
+                {"error": "Failed to fetch order", "detail": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def put(self, request, order_id):
         try:
@@ -267,51 +265,43 @@ class AdminOrderDetailView(APIView):
             serializer = OrderSerializer(order, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=400)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Order.DoesNotExist:
-            return Response({"error": "Order not found"}, status=404)
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"Error updating order: {e}")
+            return Response(
+                {"error": "Failed to update order", "detail": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def patch(self, request, order_id):
+        return self.put(request, order_id)
     
     def delete(self, request, order_id):
         try:
             order = Order.objects.get(id=order_id)
+            
+            # Restock items before deleting
+            try:
+                order_items = OrderItem.objects.filter(order=order)
+                for item in order_items:
+                    item.product.stock += item.quantity
+                    item.product.save(update_fields=['stock'])
+            except Exception as e:
+                print(f"Error restocking during deletion: {e}")
+            
             order.delete()
-            return Response({"message": "Order deleted successfully"})
+            return Response(
+                {"message": "Order deleted successfully"}, 
+                status=status.HTTP_200_OK
+            )
         except Order.DoesNotExist:
-            return Response({"error": "Order not found"}, status=404)
-
-# Add this to your orders/urls.py
-"""
-from django.urls import path
-from .views import OrderListCreateView, CancelOrderAPIView, VerifyPaymentAPIView
-
-urlpatterns = [
-    path("orders/", OrderListCreateView.as_view(), name="orders"),
-    path("orders/<int:order_id>/cancel/", CancelOrderAPIView.as_view(), name="cancel-order"),
-    path("orders/verify-payment/", VerifyPaymentAPIView.as_view(), name="verify-payment"),
-]
-"""
-
-# Update your Order model to include these fields (if not already present):
-"""
-class Order(models.Model):
-    # ... existing fields ...
-    razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
-    razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True)
-    razorpay_signature = models.CharField(max_length=200, blank=True, null=True)
-    payment_status = models.CharField(
-        max_length=20,
-        choices=[
-            ('PENDING', 'Pending'),
-            ('COMPLETED', 'Completed'),
-            ('FAILED', 'Failed'),
-        ],
-        default='PENDING'
-    )
-"""
-
-# Add to your settings.py:
-"""
-RAZORPAY_KEY_ID = 'your_razorpay_key_id'
-RAZORPAY_KEY_SECRET = 'your_razorpay_key_secret'
-"""    
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"Error deleting order: {e}")
+            return Response(
+                {"error": "Failed to delete order", "detail": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

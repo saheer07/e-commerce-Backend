@@ -135,7 +135,7 @@ class ProductPermanentDeleteAPIView(APIView):
         try:
             product = Product.objects.get(pk=pk, is_deleted=True)
             product_name = product.name
-            product.delete()  # Permanent deletion
+            product.delete()
             return Response(
                 {"message": f"Product '{product_name}' permanently deleted"}, 
                 status=status.HTTP_200_OK

@@ -187,58 +187,86 @@ class AdminUserDetailView(APIView):
 
     def get(self, request, user_id):
         try:
-            user = User.objects.get(id=user_id)
-            
-            # Get orders count and statistics
+            # Validate User
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Orders
             orders = Order.objects.filter(user=user)
             total_orders = orders.count()
-            
-            # Calculate order status counts safely
-            completed_orders = orders.filter(status__in=['delivered', 'completed', 'Delivered', 'Completed']).count()
-            cancelled_orders = orders.filter(status__in=['cancelled', 'Cancelled']).count()
-            
-            # Calculate total spent
-            total_spent_result = orders.aggregate(total_spent=Sum('total'))
-            total_spent = float(total_spent_result['total_spent'] or 0)
-            
-            # Get cart and wishlist counts
+
+            completed_orders = orders.filter(
+                status__in=['delivered', 'completed', 'Delivered', 'Completed']
+            ).count()
+
+            cancelled_orders = orders.filter(
+                status__in=['cancelled', 'Cancelled']
+            ).count()
+
+            total_spent = float(orders.aggregate(total=Sum('total'))['total'] or 0)
+
+            # Cart & Wishlist count
             cart_count = Cart.objects.filter(user=user).count()
             wishlist_count = Wishlist.objects.filter(user=user).count()
-            
-            # Get recent orders (last 10)
-            recent_orders = orders.order_by('-date')[:10] if hasattr(Order, 'date') else orders.order_by('-created_at')[:10]
+
+            # Pick date field safely
+            date_field = (
+                "date" if hasattr(Order, "date") else
+                "created_at" if hasattr(Order, "created_at") else None
+            )
+
+            # Recent orders
             order_data = []
+            if date_field:
+                recent_orders = orders.order_by(f'-{date_field}')[:10]
+            else:
+                recent_orders = orders.order_by('-id')[:10]
+
             for order in recent_orders:
+                order_date = (
+                    getattr(order, "date", None) or
+                    getattr(order, "created_at", None) or
+                    timezone.now()
+                )
+
                 order_data.append({
                     'id': order.id,
-                    'date': getattr(order, 'date', getattr(order, 'created_at', timezone.now())).strftime('%Y-%m-%d'),
+                    'date': order_date.strftime('%Y-%m-%d'),
                     'total': float(getattr(order, 'total', 0)),
                     'status': getattr(order, 'status', 'unknown'),
                     'payment_method': getattr(order, 'payment_method', 'N/A'),
                 })
-            
-            # Get cart items
+
+            # Cart
             cart_data = []
-            cart_items = Cart.objects.filter(user=user)[:10]  # Limit to 10 items
-            for item in cart_items:
+            for item in Cart.objects.filter(user=user)[:10]:
+                product = item.product
                 cart_data.append({
                     'id': item.id,
-                    'product_name': getattr(item.product, 'name', 'Unknown Product') if item.product else 'Unknown Product',
+                    'product_name': getattr(product, 'name', 'Unknown'),
                     'quantity': getattr(item, 'quantity', 1),
-                    'price': float(getattr(item.product, 'price', 0)) if item.product else 0.0,
+                    'price': float(getattr(product, 'price', 0)),
                 })
-            
-            # Get wishlist items
+
+            # Wishlist
             wishlist_data = []
-            wishlist_items = Wishlist.objects.filter(user=user)[:10]  # Limit to 10 items
-            for item in wishlist_items:
+            for item in Wishlist.objects.filter(user=user)[:10]:
+                product = item.product
+                added_date = getattr(item, 'created_at', timezone.now())
+
                 wishlist_data.append({
                     'id': item.id,
-                    'product_name': getattr(item.product, 'name', 'Unknown Product') if item.product else 'Unknown Product',
-                    'price': float(getattr(item.product, 'price', 0)) if item.product else 0.0,
-                    'added_date': getattr(item, 'created_at', timezone.now()).strftime('%Y-%m-%d'),
+                    'product_name': getattr(product, 'name', 'Unknown'),
+                    'price': float(getattr(product, 'price', 0)),
+                    'added_date': added_date.strftime('%Y-%m-%d'),
                 })
-            
+
+            # Final Response
             return Response({
                 'success': True,
                 'data': {
@@ -248,7 +276,7 @@ class AdminUserDetailView(APIView):
                         'email': user.email,
                         'first_name': user.first_name,
                         'last_name': user.last_name,
-                        'full_name': f"{user.first_name} {user.last_name}".strip() if user.first_name or user.last_name else user.username,
+                        'full_name': f"{user.first_name} {user.last_name}".strip() or user.username,
                         'phone': getattr(user, 'phone', 'Not provided'),
                         'is_active': user.is_active,
                         'is_blocked': getattr(user, 'isBlocked', False),
@@ -269,19 +297,14 @@ class AdminUserDetailView(APIView):
                     'wishlist': wishlist_data,
                 }
             }, status=status.HTTP_200_OK)
-            
-        except User.DoesNotExist:
-            return Response({
-                'success': False,
-                'error': 'User not found'
-            }, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
-            print(f"User detail error: {str(e)}")
+            print("\n🔥 User detail error:", e)
             return Response({
                 'success': False,
                 'error': f'Failed to load user details: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+        
 class AdminUserBlockView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
@@ -290,28 +313,33 @@ class AdminUserBlockView(APIView):
             user = User.objects.get(id=user_id)
             action = request.data.get('action', 'block')
             send_email = request.data.get('send_email', True)
-            
+
+            # ---- BLOCK USER ----
             if action == 'block':
                 user.is_active = False
                 user.isBlocked = True
                 message = f"User {user.email} has been blocked successfully"
-                
-                # Send warning email if requested
+
                 if send_email:
                     self.send_block_warning_email(user, request)
-                    
+
+            # ---- UNBLOCK USER ----
             elif action == 'unblock':
                 user.is_active = True
                 user.isBlocked = False
                 message = f"User {user.email} has been unblocked successfully"
+
+                if send_email:
+                    self.send_unblock_email(user, request)
+
             else:
                 return Response({
                     'success': False,
                     'error': 'Invalid action. Use "block" or "unblock"'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
+
             user.save()
-            
+
             return Response({
                 'success': True,
                 'message': message,
@@ -322,33 +350,37 @@ class AdminUserBlockView(APIView):
                     'is_blocked': user.isBlocked,
                 }
             }, status=status.HTTP_200_OK)
-            
+
         except User.DoesNotExist:
             return Response({
                 'success': False,
                 'error': 'User not found'
             }, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
             return Response({
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-    
+
+    # ===========================
+    # SEND BLOCK WARNING EMAIL
+    # ===========================
     def send_block_warning_email(self, user, request):
-        """Send warning email to blocked user"""
+        """Send warning email when user is blocked"""
         try:
             subject = "Account Blocked - Action Required"
-            
+
             context = {
                 'user': user,
                 'admin_name': request.user.get_full_name() or request.user.username,
                 'site_name': getattr(settings, 'SITE_NAME', 'MyStore'),
                 'contact_email': getattr(settings, 'CONTACT_EMAIL', 'support@example.com'),
             }
-            
+
             html_message = render_to_string('emails/account_blocked_warning.html', context)
             plain_message = strip_tags(html_message)
-            
+
             email = EmailMultiAlternatives(
                 subject=subject,
                 body=plain_message,
@@ -357,13 +389,41 @@ class AdminUserBlockView(APIView):
             )
             email.attach_alternative(html_message, "text/html")
             email.send(fail_silently=False)
-            
-            print(f"Block warning email sent to {user.email}")
-            
+
         except Exception as e:
-            print(f"Failed to send block warning email to {user.email}: {str(e)}")
-            # Don't fail the entire request if email fails
-            pass
+            print(f"Failed to send block warning email: {str(e)}")
+
+    # ===========================
+    # SEND UNBLOCK EMAIL
+    # ===========================
+    def send_unblock_email(self, user, request):
+        """Send email when user is unblocked"""
+        try:
+            subject = "Your Account Has Been Unblocked"
+
+            context = {
+                'user': user,
+                'admin_name': request.user.get_full_name() or request.user.username,
+                'site_name': getattr(settings, 'SITE_NAME', 'MyStore'),
+                'contact_email': getattr(settings, 'CONTACT_EMAIL', 'support@example.com'),
+            }
+
+            html_message = render_to_string('emails/account_unblocked.html', context)
+            plain_message = strip_tags(html_message)
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user.email]
+            )
+            email.attach_alternative(html_message, "text/html")
+            email.send(fail_silently=False)
+
+        except Exception as e:
+            print(f"Failed to send unblock email: {str(e)}")
+
+
 
 # Add this temporary debug view to your urls.py
 class DebugUserDetailView(APIView):
@@ -410,50 +470,57 @@ class DebugUserDetailView(APIView):
         
 
 class AdminSendWarningEmailView(APIView):
-    """API to manually send warning email to user"""
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, user_id):
         try:
-            user = User.objects.get(id=user_id)
-            
-            # Send warning email
+            # 1. Check custom_message exists
+            custom_message = request.data.get("custom_message", "")
+
+            # 2. Validate: User Exists
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({
+                    "success": False,
+                    "error": "User not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # 3. Render email
             subject = "Account Warning - Action Required"
-            
+
             context = {
-                'user': user,
-                'admin_name': request.user.get_full_name() or request.user.username,
-                'site_name': getattr(settings, 'SITE_NAME', 'MyStore'),
-                'contact_email': getattr(settings, 'CONTACT_EMAIL', 'support@example.com'),
-                'is_manual': True,
-                'custom_message': request.data.get('custom_message', ''),
+                "user": user,
+                "admin_name": request.user.get_full_name() or request.user.username,
+                "site_name": getattr(settings, "SITE_NAME", "MyStore"),
+                "contact_email": getattr(settings, "CONTACT_EMAIL", "support@example.com"),
+                "custom_message": custom_message,
+                "is_manual": True,
             }
-            
-            html_message = render_to_string('emails/account_warning.html', context)
+
+            html_message = render_to_string("emails/account_warning.html", context)
             plain_message = strip_tags(html_message)
-            
+
+            # 4. Send email correctly
             email = EmailMultiAlternatives(
                 subject=subject,
                 body=plain_message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[user.email]
+                to=[user.email],
             )
             email.attach_alternative(html_message, "text/html")
             email.send(fail_silently=False)
-            
+
             return Response({
-                'success': True,
-                'message': f'Warning email sent successfully to {user.email}'
+                "success": True,
+                "message": f"Warning email sent successfully to {user.email}"
             }, status=status.HTTP_200_OK)
-            
-        except User.DoesNotExist:
-            return Response({
-                'success': False,
-                'error': 'User not found'
-            }, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
-            print(f"Error sending warning email: {str(e)}")
+            print("\n🔥 ERROR SENDING WARNING EMAIL:", str(e))
             return Response({
-                'success': False,
-                'error': f'Failed to send email: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)        
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
